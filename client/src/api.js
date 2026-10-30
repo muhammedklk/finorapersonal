@@ -1,4 +1,4 @@
-const API = '/api';
+const API = (import.meta.env.VITE_API_URL || '/api').replace(/\/+$/, '');
 export function makeApi(token) {
   const request = async (path, options = {}) => {
     let res;
