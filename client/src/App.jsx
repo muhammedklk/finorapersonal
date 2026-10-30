@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { Activity, ArrowDownLeft, ArrowLeftRight, ArrowUpRight, ArrowRight, Bell, CalendarDays, Camera, Check, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, CreditCard, Download, Eye, EyeOff, FileChartColumn, Filter, Goal as GoalIcon, LayoutDashboard, Lock, LogOut, Mail, Menu, Moon, MoreHorizontal, PiggyBank, Plus, Repeat2, Search, Settings, ShieldCheck, Sparkles, Star, Sun, Target, TrendingUp, Upload, User as UserIcon, Wallet, X, Trash2, Pencil } from 'lucide-react';
+import { Activity, ArrowDownLeft, ArrowLeftRight, ArrowUpRight, ArrowRight, Bell, CalendarDays, Camera, Check, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, CreditCard, Download, Eye, EyeOff, FileChartColumn, Filter, Goal as GoalIcon, LayoutDashboard, Lock, LogOut, Mail, Menu, Moon, MoreHorizontal, PiggyBank, Plus, Repeat2, Search, Settings, ShieldCheck, Sparkles, Star, Sun, Target, TrendingUp, Upload, User as UserIcon, Wallet, X, Trash2, Pencil, Zap } from 'lucide-react';
 import { makeApi } from './api';
 const categories = ['Food & Dining', 'Transport', 'Shopping', 'Bills & Utilities', 'Health', 'Entertainment', 'Education', 'Rent', 'Savings', 'Salary', 'Freelance', 'Investment', 'Other'];
 const colors = ['#6c63ff', '#37b8a5', '#f5a65b', '#ed6a83', '#5c9ded', '#aa80df', '#80bd6b', '#e5c35b'];
@@ -89,171 +89,330 @@ function AuthScreen({ mode, setMode, onSubmit, error }) {
         setPassword('demo12345');
         if (mode === 'register') setName('Finora Member');
     };
-    return <div className="auth-page">
-        <div className="auth-visual">
-            <div className="auth-visual-inner">
-                <div className="auth-brand">
-                    <div className="brand-mark"><Activity size={20} /></div>
-                    <span>finora<span className="brand-dot">.</span></span>
-                    <span className="auth-version-pill">v2.4 PRO</span>
+    return (
+        <div style={{
+            height: '100vh',
+            width: '100vw',
+            overflow: 'hidden',
+            backgroundColor: '#f8fafc',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px',
+            fontFamily: "'DM Sans', sans-serif",
+            position: 'relative'
+        }}>
+            {/* Subtle background glow */}
+            <div style={{
+                position: 'absolute',
+                top: '10%',
+                left: '25%',
+                width: '320px',
+                height: '320px',
+                background: 'radial-gradient(circle, rgba(108, 99, 255, 0.12) 0%, transparent 70%)',
+                pointerEvents: 'none'
+            }} />
+            <div style={{
+                position: 'absolute',
+                bottom: '10%',
+                right: '25%',
+                width: '300px',
+                height: '300px',
+                background: 'radial-gradient(circle, rgba(55, 184, 165, 0.12) 0%, transparent 70%)',
+                pointerEvents: 'none'
+            }} />
+
+            {/* Clean Light Card */}
+            <div style={{
+                width: '100%',
+                maxWidth: '400px',
+                backgroundColor: '#ffffff',
+                borderRadius: '16px',
+                boxShadow: '0 10px 30px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04)',
+                border: '1px solid #e2e8f0',
+                padding: '28px 24px',
+                zIndex: 1
+            }}>
+                {/* Brand Header */}
+                <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+                    <div style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '42px',
+                        height: '42px',
+                        borderRadius: '12px',
+                        background: 'linear-gradient(135deg, #6c63ff, #5548f4)',
+                        color: '#fff',
+                        marginBottom: '10px',
+                        boxShadow: '0 4px 12px rgba(108, 99, 255, 0.3)'
+                    }}>
+                        <Activity size={22} />
+                    </div>
+                    <h1 style={{
+                        fontSize: '22px',
+                        fontWeight: '800',
+                        color: '#1e293b',
+                        margin: 0,
+                        fontFamily: "'Manrope', sans-serif",
+                        letterSpacing: '-0.5px'
+                    }}>
+                        finora<span style={{ color: '#6c63ff' }}>.</span>
+                    </h1>
+                    <p style={{
+                        fontSize: '12px',
+                        color: '#64748b',
+                        margin: '4px 0 0'
+                    }}>
+                        {mode === 'login' ? 'Sign in to access your financial dashboard' : 'Create an account to start managing finances'}
+                    </p>
                 </div>
 
-                <div className="auth-copy">
-                    <div className="eyebrow">
-                        <span className="live-dot" />
-                        <span>FINANCIAL CLARITY & INTELLIGENCE</span>
-                    </div>
-                    <h1>Master your money with<br /><em>effortless precision.</em></h1>
-                    <p className="auth-lead-p">A serene, modern dashboard to track cashflow, grow personal savings, and keep your financial future in sharp focus.</p>
-
-                    <motion.div className="auth-preview-card" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .5, delay: .15 }}>
-                        <div className="auth-preview-header">
-                            <div>
-                                <div className="preview-label">NET BALANCE OVERVIEW</div>
-                                <div className="preview-sum">₹1,48,250 <span className="preview-badge"><TrendingUp size={12} /> +18.4%</span></div>
-                            </div>
-                            <div className="preview-live-pill"><i /> LIVE SYNC</div>
-                        </div>
-                        <div className="preview-chart-wrap">
-                            <svg viewBox="0 0 440 100" preserveAspectRatio="none" className="preview-svg">
-                                <defs>
-                                    <linearGradient id="chartGlow" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="0%" stopColor="#8d84ff" stopOpacity="0.45" />
-                                        <stop offset="60%" stopColor="#8d84ff" stopOpacity="0.1" />
-                                        <stop offset="100%" stopColor="#8d84ff" stopOpacity="0" />
-                                    </linearGradient>
-                                </defs>
-                                <path d="M0,82 C40,75 80,60 120,68 C160,76 195,45 235,50 C275,55 310,25 350,30 C390,35 415,10 440,8 L440,100 L0,100 Z" fill="url(#chartGlow)" />
-                                <path d="M0,82 C40,75 80,60 120,68 C160,76 195,45 235,50 C275,55 310,25 350,30 C390,35 415,10 440,8" fill="none" stroke="#9d95ff" strokeWidth="3" strokeLinecap="round" />
-                            </svg>
-                        </div>
-                        <div className="preview-stats-row">
-                            <div className="preview-micro-stat">
-                                <span>Monthly Inflow</span>
-                                <strong>₹85,000</strong>
-                            </div>
-                            <div className="preview-micro-stat">
-                                <span>Target Saved</span>
-                                <strong style={{ color: '#37b8a5' }}>₹32,500</strong>
-                            </div>
-                            <div className="preview-micro-stat">
-                                <span>Safe to Spend</span>
-                                <strong style={{ color: '#f5a65b' }}>₹18,450</strong>
-                            </div>
-                        </div>
-                    </motion.div>
-
-                    <div className="auth-features-pills">
-                        <span className="auth-feature-pill"><ShieldCheck size={14} /> Bank-grade 256-bit AES</span>
-                        <span className="auth-feature-pill"><Zap size={14} /> Realtime Stats</span>
-                        <span className="auth-feature-pill"><Sparkles size={14} /> 100% Private</span>
-                    </div>
-
-                    <div className="auth-proof-strip">
-                        <div className="proof-avatars">
-                            <span className="avatar-mini a1">MK</span>
-                            <span className="avatar-mini a2">RS</span>
-                            <span className="avatar-mini a3">AJ</span>
-                        </div>
-                        <div className="proof-copy">
-                            <div className="proof-stars">
-                                <Star size={12} fill="#ffc107" color="#ffc107" />
-                                <Star size={12} fill="#ffc107" color="#ffc107" />
-                                <Star size={12} fill="#ffc107" color="#ffc107" />
-                                <Star size={12} fill="#ffc107" color="#ffc107" />
-                                <Star size={12} fill="#ffc107" color="#ffc107" />
-                            </div>
-                            <span>Trusted by 10,000+ mindful savers across India</span>
-                        </div>
-                    </div>
+                {/* Mode Switcher */}
+                <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr',
+                    padding: '4px',
+                    backgroundColor: '#f1f5f9',
+                    borderRadius: '10px',
+                    marginBottom: '18px',
+                    gap: '4px'
+                }}>
+                    <button
+                        type="button"
+                        onClick={() => setMode('login')}
+                        style={{
+                            border: 0,
+                            padding: '7px 12px',
+                            borderRadius: '7px',
+                            fontSize: '12px',
+                            fontWeight: '600',
+                            cursor: 'pointer',
+                            backgroundColor: mode === 'login' ? '#ffffff' : 'transparent',
+                            color: mode === 'login' ? '#6c63ff' : '#64748b',
+                            boxShadow: mode === 'login' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                            transition: 'all 0.15s ease'
+                        }}
+                    >
+                        Sign In
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setMode('register')}
+                        style={{
+                            border: 0,
+                            padding: '7px 12px',
+                            borderRadius: '7px',
+                            fontSize: '12px',
+                            fontWeight: '600',
+                            cursor: 'pointer',
+                            backgroundColor: mode === 'register' ? '#ffffff' : 'transparent',
+                            color: mode === 'register' ? '#6c63ff' : '#64748b',
+                            boxShadow: mode === 'register' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                            transition: 'all 0.15s ease'
+                        }}
+                    >
+                        Create Account
+                    </button>
                 </div>
 
-                <div className="auth-decor-glow glow-primary" />
-                <div className="auth-decor-glow glow-secondary" />
-            </div>
-        </div>
+                {/* Form */}
+                <form onSubmit={async (e) => {
+                    e.preventDefault();
+                    setBusy(true);
+                    await onSubmit({ name, email, password });
+                    setBusy(false);
+                }} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
 
-        <div className="auth-form-side">
-            <div className="auth-card-wrap">
-                <div className="auth-mobile-header">
-                    <div className="brand-mark"><Activity size={20} /></div>
-                    <span>finora<span className="brand-dot">.</span></span>
-                </div>
-
-                <div className="auth-mode-toggle">
-                    <button type="button" className={`mode-btn ${mode === 'login' ? 'active' : ''}`} onClick={() => setMode('login')}>Sign In</button>
-                    <button type="button" className={`mode-btn ${mode === 'register' ? 'active' : ''}`} onClick={() => setMode('register')}>Create Account</button>
-                </div>
-
-                <div className="auth-form-header">
-                    <h2>{mode === 'login' ? 'Welcome back' : 'Create account'}</h2>
-                    <p>{mode === 'login' ? 'Enter your account credentials to access your financial dashboard.' : 'Join Finora today for calmer, smarter personal financial planning.'}</p>
-                </div>
-
-                <form onSubmit={async e => { e.preventDefault(); setBusy(true); await onSubmit({ name, email, password }); setBusy(false) }}>
-                    {mode === 'register' && <div className="auth-input-group">
-                        <label className="auth-label">Full Name</label>
-                        <div className="auth-input-wrap">
-                            <UserIcon size={17} className="auth-input-icon" />
-                            <input className="auth-input" value={name} onChange={e => setName(e.target.value)} required minLength="2" maxLength="80" placeholder="e.g. Muhammed Shan" />
+                    {mode === 'register' && (
+                        <div>
+                            <label style={{ display: 'block', fontSize: '11px', fontWeight: '600', color: '#475569', marginBottom: '5px' }}>Full Name</label>
+                            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                <UserIcon size={16} style={{ position: 'absolute', left: '11px', color: '#94a3b8' }} />
+                                <input
+                                    type="text"
+                                    value={name}
+                                    onChange={e => setName(e.target.value)}
+                                    required
+                                    minLength={2}
+                                    placeholder="e.g. Muhammed Shan"
+                                    style={{
+                                        width: '100%',
+                                        padding: '8px 12px 8px 34px',
+                                        fontSize: '12px',
+                                        backgroundColor: '#f8fafc',
+                                        border: '1px solid #cbd5e1',
+                                        borderRadius: '8px',
+                                        color: '#1e293b',
+                                        outline: 'none'
+                                    }}
+                                />
+                            </div>
                         </div>
-                    </div>}
+                    )}
 
-                    <div className="auth-input-group">
-                        <label className="auth-label">Email Address</label>
-                        <div className="auth-input-wrap">
-                            <Mail size={17} className="auth-input-icon" />
-                            <input className="auth-input" type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="you@domain.com" autoComplete="email" />
+                    <div>
+                        <label style={{ display: 'block', fontSize: '11px', fontWeight: '600', color: '#475569', marginBottom: '5px' }}>Email Address</label>
+                        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                            <Mail size={16} style={{ position: 'absolute', left: '11px', color: '#94a3b8' }} />
+                            <input
+                                type="email"
+                                value={email}
+                                onChange={e => setEmail(e.target.value)}
+                                required
+                                placeholder="you@domain.com"
+                                style={{
+                                    width: '100%',
+                                    padding: '8px 12px 8px 34px',
+                                    fontSize: '12px',
+                                    backgroundColor: '#f8fafc',
+                                    border: '1px solid #cbd5e1',
+                                    borderRadius: '8px',
+                                    color: '#1e293b',
+                                    outline: 'none'
+                                }}
+                            />
                         </div>
                     </div>
 
-                    <div className="auth-input-group">
-                        <div className="auth-label-row">
-                            <label className="auth-label">Password</label>
-                            {mode === 'login' && <span className="auth-forgot-hint" title="Contact workspace admin if forgotten">Forgot password?</span>}
+                    <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
+                            <label style={{ fontSize: '11px', fontWeight: '600', color: '#475569', margin: 0 }}>Password</label>
+                            {mode === 'login' && (
+                                <span style={{ fontSize: '10px', color: '#64748b', cursor: 'default' }} title="Contact admin if forgotten">Forgot?</span>
+                            )}
                         </div>
-                        <div className="auth-input-wrap">
-                            <Lock size={17} className="auth-input-icon" />
-                            <input className="auth-input" type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} required minLength="8" placeholder="At least 8 characters" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
-                            <button type="button" className="auth-pw-toggle" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button>
+                        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                            <Lock size={16} style={{ position: 'absolute', left: '11px', color: '#94a3b8' }} />
+                            <input
+                                type={showPassword ? 'text' : 'password'}
+                                value={password}
+                                onChange={e => setPassword(e.target.value)}
+                                required
+                                minLength={8}
+                                placeholder="At least 8 characters"
+                                style={{
+                                    width: '100%',
+                                    padding: '8px 34px 8px 34px',
+                                    fontSize: '12px',
+                                    backgroundColor: '#f8fafc',
+                                    border: '1px solid #cbd5e1',
+                                    borderRadius: '8px',
+                                    color: '#1e293b',
+                                    outline: 'none'
+                                }}
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowPassword(!showPassword)}
+                                style={{
+                                    position: 'absolute',
+                                    right: '9px',
+                                    background: 'none',
+                                    border: 'none',
+                                    padding: 0,
+                                    color: '#94a3b8',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center'
+                                }}
+                            >
+                                {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                            </button>
                         </div>
                     </div>
 
-                    {error && <motion.div className="auth-error-banner" initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}>
-                        <span className="error-icon">!</span>
-                        <span>{error}</span>
-                    </motion.div>}
+                    {error && (
+                        <div style={{
+                            padding: '8px 10px',
+                            backgroundColor: '#fef2f2',
+                            border: '1px solid #fecaca',
+                            borderRadius: '8px',
+                            color: '#dc2626',
+                            fontSize: '11px',
+                            textAlign: 'center',
+                            fontWeight: '500'
+                        }}>
+                            {error}
+                        </div>
+                    )}
 
-                    <button className="auth-submit-btn" disabled={busy}>
-                        <span>{busy ? 'Connecting to workspace…' : mode === 'login' ? 'Sign in to Finora' : 'Get Started Free'}</span>
-                        <ArrowRight size={17} />
+                    <button
+                        type="submit"
+                        disabled={busy}
+                        style={{
+                            marginTop: '4px',
+                            padding: '9px 16px',
+                            backgroundColor: '#6c63ff',
+                            color: '#ffffff',
+                            border: 'none',
+                            borderRadius: '8px',
+                            fontSize: '12px',
+                            fontWeight: '600',
+                            cursor: busy ? 'not-allowed' : 'pointer',
+                            opacity: busy ? 0.7 : 1,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px',
+                            boxShadow: '0 2px 6px rgba(108, 99, 255, 0.25)',
+                            transition: 'background-color 0.15s ease'
+                        }}
+                    >
+                        <span>{busy ? 'Please wait…' : mode === 'login' ? 'Sign in to Finora' : 'Create Account'}</span>
+                        {!busy && <ArrowRight size={14} />}
                     </button>
                 </form>
 
-                <div className="auth-demo-box">
-                    <div className="demo-copy">
-                        <Sparkles size={14} className="sparkle-icon" />
-                        <span>Want to test quickly?</span>
+                {/* Demo Credentials Quick Button */}
+                {mode === 'login' && (
+                    <div style={{
+                        marginTop: '16px',
+                        paddingTop: '12px',
+                        borderTop: '1px solid #f1f5f9',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between'
+                    }}>
+                        <span style={{ fontSize: '11px', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <Sparkles size={13} style={{ color: '#f59e0b' }} />
+                            Want to test quickly?
+                        </span>
+                        <button
+                            type="button"
+                            onClick={handleDemoFill}
+                            style={{
+                                background: 'none',
+                                border: 'none',
+                                padding: 0,
+                                fontSize: '11px',
+                                color: '#6c63ff',
+                                fontWeight: '600',
+                                cursor: 'pointer',
+                                textDecoration: 'underline'
+                            }}
+                        >
+                            Fill Demo Login
+                        </button>
                     </div>
-                    <button type="button" className="demo-fill-btn" onClick={handleDemoFill}>Fill Demo Credentials</button>
-                </div>
+                )}
 
-                <div className="auth-foot-switch">
-                    <span>{mode === 'login' ? "Don't have an account yet?" : "Already registered?"}</span>
-                    <button type="button" onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>{mode === 'login' ? 'Create one for free' : 'Sign in here'}</button>
-                </div>
-
-                <div className="auth-trust-strip">
-                    <ShieldCheck size={14} />
-                    <span>Protected by 256-bit encryption · MongoDB Cloud</span>
+                {/* Footer security tag */}
+                <div style={{
+                    marginTop: '14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '5px',
+                    fontSize: '10px',
+                    color: '#94a3b8'
+                }}>
+                    <ShieldCheck size={13} style={{ color: '#10b981' }} />
+                    <span>Protected by 256-bit encryption</span>
                 </div>
             </div>
-
-            <footer className="auth-side-footer">
-                © 2026 Finora Finance <span>·</span> Private & Protected Workspace
-            </footer>
         </div>
-    </div>;
+    );
 }
 function SectionHeader({ eyebrow, title, subtitle, action }) { return <motion.div className="section-header" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .35, ease: [.16, 1, .3, 1] }}><div><div className="section-eyebrow">{eyebrow}</div><h2>{title}</h2>{subtitle && <p>{subtitle}</p>}</div>{action}</motion.div> }
 function StatCard({ title, value, icon, tone, delta, sub, delay = 0 }) { return <motion.div className="stat-card" initial={{ opacity: 0, y: 22, scale: .97 }} animate={{ opacity: 1, y: 0, scale: 1 }} whileHover={{ y: -4, transition: { duration: .2 } }} transition={{ duration: .45, ease: [.16, 1, .3, 1], delay }}><div className="stat-top"><span>{title}</span><IconBox tone={tone}>{icon}</IconBox></div><div className="stat-value"><AnimatedNumber value={value} /></div><div className="stat-bottom">{delta && <span className={`stat-delta ${delta.startsWith('-') ? 'negative' : ''}`}>{delta}</span>}<span>{sub}</span></div></motion.div> }
