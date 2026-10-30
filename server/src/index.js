@@ -1,4 +1,6 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
@@ -8,6 +10,14 @@ import authRoutes from './routes/auth.js';
 import transactionRoutes from './routes/transactions.js';
 import planningRoutes from './routes/planning.js';
 import auth from './middleware/auth.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load environment variables from process.cwd() or server directory
+dotenv.config();
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 const app = express();
 app.disable('x-powered-by');
@@ -25,7 +35,10 @@ app.use(morgan('dev'));
 let isConnected = false;
 async function connectDB() {
   if (isConnected && mongoose.connection.readyState === 1) return;
-  const uri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/finora';
+  const uri = process.env.MONGODB_URI;
+  if (!uri) {
+    throw new Error('MONGODB_URI is not defined in environment variables. Please check your .env or Vercel Environment Variables.');
+  }
   const db = await mongoose.connect(uri);
   isConnected = db.connections[0].readyState === 1;
 }
