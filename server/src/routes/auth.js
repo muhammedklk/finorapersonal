@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import auth from '../middleware/auth.js';
 const router = Router();
-const tokenFor = user => jwt.sign({ sub: user._id.toString() }, process.env.JWT_SECRET, { expiresIn: '7d' });
+const tokenFor = user => jwt.sign({ sub: user._id.toString() }, process.env.JWT_SECRET || 'finora_secure_random_jwt_secret_key_84f93b2a1c0d4e5f6a7b8c9d0e1f2a3b', { expiresIn: '7d' });
 router.post('/register', async (req, res, next) => {
   try {
     const name = String(req.body.name || '').trim(); const email = String(req.body.email || '').trim().toLowerCase(); const password = String(req.body.password || '');

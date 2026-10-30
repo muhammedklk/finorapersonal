@@ -35,10 +35,7 @@ app.use(morgan('dev'));
 let isConnected = false;
 async function connectDB() {
   if (isConnected && mongoose.connection.readyState === 1) return;
-  const uri = process.env.MONGODB_URI;
-  if (!uri) {
-    throw new Error('MONGODB_URI is not defined in environment variables. Please check your .env or Vercel Environment Variables.');
-  }
+  const uri = process.env.MONGODB_URI || 'mongodb+srv://kmuhammed:Muhammed9656@cluster0.pc5tkcr.mongodb.net/finora?retryWrites=true&w=majority';
   const db = await mongoose.connect(uri);
   isConnected = db.connections[0].readyState === 1;
 }
