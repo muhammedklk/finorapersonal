@@ -40,13 +40,20 @@ function App() {
     const categoryData = useMemo(() => { const map = {}; currentTransactions.filter(t => t.type === 'expense').forEach(t => map[t.category] = (map[t.category] || 0) + t.amount); return Object.entries(map).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value) }, [currentTransactions]);
     const yearlyCategoryData = useMemo(() => { const map = {}; yearTransactions.filter(t => t.type === 'expense').forEach(t => map[t.category] = (map[t.category] || 0) + t.amount); return Object.entries(map).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value) }, [yearTransactions]);
     const budgetRows = useMemo(() => budgets.filter(b => b.month === month).map(b => ({ ...b, spent: currentTransactions.filter(t => t.type === 'expense' && t.category === b.category).reduce((s, t) => s + t.amount, 0) })), [budgets, month, currentTransactions]);
-    const doAuth = async (data) => { setError(''); try { const res = await makeApi('').post(`/auth/${authMode === 'login' ? 'login' : 'register'}`, data); localStorage.setItem('finora_token', res.token); localStorage.setItem('finora_user', JSON.stringify(res.user)); setToken(res.token); setUser(res.user); notify(authMode === 'login' ? 'Welcome back!' : 'Account created successfully.'); } catch (e) { setError(e.message) } };
+    const handleAuthSuccess = (res) => {
+        localStorage.setItem('finora_token', res.token);
+        localStorage.setItem('finora_user', JSON.stringify(res.user));
+        setToken(res.token);
+        setUser(res.user);
+        notify(res.message || 'Welcome to Finora!');
+    };
+    const doAuth = async (data) => { setError(''); try { const res = await makeApi('').post(`/auth/${authMode === 'login' ? 'login' : 'register'}`, data); handleAuthSuccess(res); } catch (e) { setError(e.message) } };
     const saveTransaction = async (data) => { try { if (editRow) await api.put(`/transactions/${editRow._id}`, data); else await api.post('/transactions', data); setShowTransaction(false); setEditRow(null); if (data.date && String(data.date).slice(0, 7) !== month) { setMonth(String(data.date).slice(0, 7)); } await loadData(); notify(editRow ? 'Transaction updated' : 'Transaction added'); } catch (e) { setError(e.message) } };
     const deleteTransaction = async (id) => { if (!confirm('Delete this transaction?')) return; try { await api.delete(`/transactions/${id}`); await loadData(); notify('Transaction deleted'); } catch (e) { setError(e.message) } };
     const exportCsv = () => { const rows = [['Date', 'Type', 'Category', 'Description', 'Payment method', 'Amount'], ...visibleTransactions.map(t => [String(t.date).slice(0, 10), t.type, t.category, t.description || '', t.paymentMethod, t.amount])]; const csv = rows.map(r => r.map(v => `"${String(v ?? '').replaceAll('"', '""')}"`).join(',')).join('\r\n'); const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' })); a.download = `finora-transactions-${month}.csv`; a.click(); URL.revokeObjectURL(a.href); };
     const processRecurring = async () => { try { const r = await api.post('/planning/recurring/run', {}); await loadData(); notify(r.message) } catch (e) { setError(e.message) } };
     const nav = [{ label: 'Overview', icon: LayoutDashboard }, { label: 'Transactions', icon: ArrowLeftRight }, { label: 'Budgets', icon: Wallet }, { label: 'Savings goals', icon: Target }, { label: 'Recurring', icon: Repeat2 }, { label: 'Financial reports', icon: FileChartColumn }, { label: 'Settings', icon: Settings }];
-    if (!token) return <AuthScreen mode={authMode} setMode={setAuthMode} onSubmit={doAuth} error={error} />;
+    if (!token) return <AuthScreen mode={authMode} setMode={setAuthMode} onSubmit={doAuth} error={error} setError={setError} onAuthSuccess={handleAuthSuccess} notify={notify} />;
     return <div className={`app-shell ${dark ? 'dark' : ''}`}>
         <AnimatePresence>{sidebarOpen && <motion.div className="mobile-scrim" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSidebarOpen(false)} />}</AnimatePresence>
         <aside className={`sidebar ${sidebarOpen ? 'sidebar-open' : ''}`}>
@@ -82,13 +89,118 @@ function App() {
         <AnimatePresence>{toast && <motion.div className="toast-message" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }}><Check size={17} />{toast}</motion.div>}</AnimatePresence>
     </div>
 }
-function AuthScreen({ mode, setMode, onSubmit, error }) {
-    const [name, setName] = useState(''), [email, setEmail] = useState(''), [password, setPassword] = useState(''), [showPassword, setShowPassword] = useState(false), [busy, setBusy] = useState(false);
+function AuthScreen({ mode, setMode, onSubmit, error, setError, onAuthSuccess, notify }) {
+    const [name, setName] = useState('');
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [newPassword, setNewPassword] = useState('');
+    const [otp, setOtp] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
+    const [busy, setBusy] = useState(false);
+    const [localMsg, setLocalMsg] = useState('');
+    const [regStep, setRegStep] = useState('input'); // 'input' | 'otp'
+    const [forgotStep, setForgotStep] = useState('email'); // 'email' | 'reset'
+
+    const clearStatus = () => {
+        if (setError) setError('');
+        setLocalMsg('');
+    };
+
     const handleDemoFill = () => {
         setEmail('demo@finora.io');
         setPassword('demo12345');
         if (mode === 'register') setName('Finora Member');
+        clearStatus();
     };
+
+    // Mode switch handler
+    const switchMode = (newMode) => {
+        setMode(newMode);
+        setRegStep('input');
+        setForgotStep('email');
+        setOtp('');
+        clearStatus();
+    };
+
+    // 1. Login Submit
+    const handleLoginSubmit = async (e) => {
+        e.preventDefault();
+        setBusy(true);
+        clearStatus();
+        try {
+            await onSubmit({ email, password });
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    // 2. Register: Step 1 - Send OTP
+    const handleSendRegisterOtp = async (e) => {
+        e.preventDefault();
+        setBusy(true);
+        clearStatus();
+        try {
+            const res = await makeApi('').post('/auth/register/send-otp', { name, email, password });
+            setLocalMsg(res.message || `Verification code sent to ${email}`);
+            setRegStep('otp');
+        } catch (err) {
+            if (setError) setError(err.message);
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    // 3. Register: Step 2 - Verify OTP & Create Account
+    const handleVerifyRegisterOtp = async (e) => {
+        e.preventDefault();
+        setBusy(true);
+        clearStatus();
+        try {
+            const res = await makeApi('').post('/auth/register/verify-otp', { name, email, password, otp });
+            if (onAuthSuccess) onAuthSuccess(res);
+        } catch (err) {
+            if (setError) setError(err.message);
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    // 4. Forgot Password: Step 1 - Send Reset OTP
+    const handleSendForgotOtp = async (e) => {
+        e.preventDefault();
+        setBusy(true);
+        clearStatus();
+        try {
+            const res = await makeApi('').post('/auth/forgot-password/send-otp', { email });
+            setLocalMsg(res.message || `Reset code sent to ${email}`);
+            setForgotStep('reset');
+        } catch (err) {
+            if (setError) setError(err.message);
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    // 5. Forgot Password: Step 2 - Reset with OTP
+    const handleResetPassword = async (e) => {
+        e.preventDefault();
+        setBusy(true);
+        clearStatus();
+        try {
+            const res = await makeApi('').post('/auth/forgot-password/reset', { email, otp, newPassword });
+            if (notify) notify(res.message || 'Password updated successfully! Please sign in.');
+            setMode('login');
+            setPassword('');
+            setOtp('');
+            setForgotStep('email');
+            setLocalMsg('Password updated! You can now sign in.');
+        } catch (err) {
+            if (setError) setError(err.message);
+        } finally {
+            setBusy(false);
+        }
+    };
+
     return (
         <div style={{
             height: '100vh',
@@ -102,7 +214,7 @@ function AuthScreen({ mode, setMode, onSubmit, error }) {
             fontFamily: "'DM Sans', sans-serif",
             position: 'relative'
         }}>
-            {/* Subtle background glow */}
+            {/* Background glow */}
             <div style={{
                 position: 'absolute',
                 top: '10%',
@@ -125,29 +237,29 @@ function AuthScreen({ mode, setMode, onSubmit, error }) {
             {/* Clean Light Card */}
             <div style={{
                 width: '100%',
-                maxWidth: '400px',
+                maxWidth: '410px',
                 backgroundColor: '#ffffff',
                 borderRadius: '16px',
                 boxShadow: '0 10px 30px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04)',
                 border: '1px solid #e2e8f0',
-                padding: '28px 24px',
+                padding: '26px 24px',
                 zIndex: 1
             }}>
                 {/* Brand Header */}
-                <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+                <div style={{ textAlign: 'center', marginBottom: '18px' }}>
                     <div style={{
                         display: 'inline-flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        width: '42px',
-                        height: '42px',
+                        width: '40px',
+                        height: '40px',
                         borderRadius: '12px',
                         background: 'linear-gradient(135deg, #6c63ff, #5548f4)',
                         color: '#fff',
-                        marginBottom: '10px',
+                        marginBottom: '8px',
                         boxShadow: '0 4px 12px rgba(108, 99, 255, 0.3)'
                     }}>
-                        <Activity size={22} />
+                        <Activity size={20} />
                     </div>
                     <h1 style={{
                         fontSize: '22px',
@@ -164,71 +276,219 @@ function AuthScreen({ mode, setMode, onSubmit, error }) {
                         color: '#64748b',
                         margin: '4px 0 0'
                     }}>
-                        {mode === 'login' ? 'Sign in to access your financial dashboard' : 'Create an account to start managing finances'}
+                        {mode === 'login' && 'Sign in to access your financial dashboard'}
+                        {mode === 'register' && (regStep === 'input' ? 'Create an account to start managing finances' : `Verification code sent to ${email}`)}
+                        {mode === 'forgot' && (forgotStep === 'email' ? 'Reset your forgotten password' : `Enter reset code sent to ${email}`)}
                     </p>
                 </div>
 
-                {/* Mode Switcher */}
-                <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: '1fr 1fr',
-                    padding: '4px',
-                    backgroundColor: '#f1f5f9',
-                    borderRadius: '10px',
-                    marginBottom: '18px',
-                    gap: '4px'
-                }}>
-                    <button
-                        type="button"
-                        onClick={() => setMode('login')}
-                        style={{
-                            border: 0,
-                            padding: '7px 12px',
-                            borderRadius: '7px',
-                            fontSize: '12px',
-                            fontWeight: '600',
-                            cursor: 'pointer',
-                            backgroundColor: mode === 'login' ? '#ffffff' : 'transparent',
-                            color: mode === 'login' ? '#6c63ff' : '#64748b',
-                            boxShadow: mode === 'login' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
-                            transition: 'all 0.15s ease'
-                        }}
-                    >
-                        Sign In
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => setMode('register')}
-                        style={{
-                            border: 0,
-                            padding: '7px 12px',
-                            borderRadius: '7px',
-                            fontSize: '12px',
-                            fontWeight: '600',
-                            cursor: 'pointer',
-                            backgroundColor: mode === 'register' ? '#ffffff' : 'transparent',
-                            color: mode === 'register' ? '#6c63ff' : '#64748b',
-                            boxShadow: mode === 'register' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
-                            transition: 'all 0.15s ease'
-                        }}
-                    >
-                        Create Account
-                    </button>
-                </div>
+                {/* Mode Switcher Tabs (Only in Login or Register) */}
+                {mode !== 'forgot' && (
+                    <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1fr',
+                        padding: '4px',
+                        backgroundColor: '#f1f5f9',
+                        borderRadius: '10px',
+                        marginBottom: '16px',
+                        gap: '4px'
+                    }}>
+                        <button
+                            type="button"
+                            onClick={() => switchMode('login')}
+                            style={{
+                                border: 0,
+                                padding: '7px 12px',
+                                borderRadius: '7px',
+                                fontSize: '12px',
+                                fontWeight: '600',
+                                cursor: 'pointer',
+                                backgroundColor: mode === 'login' ? '#ffffff' : 'transparent',
+                                color: mode === 'login' ? '#6c63ff' : '#64748b',
+                                boxShadow: mode === 'login' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                                transition: 'all 0.15s ease'
+                            }}
+                        >
+                            Sign In
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => switchMode('register')}
+                            style={{
+                                border: 0,
+                                padding: '7px 12px',
+                                borderRadius: '7px',
+                                fontSize: '12px',
+                                fontWeight: '600',
+                                cursor: 'pointer',
+                                backgroundColor: mode === 'register' ? '#ffffff' : 'transparent',
+                                color: mode === 'register' ? '#6c63ff' : '#64748b',
+                                boxShadow: mode === 'register' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                                transition: 'all 0.15s ease'
+                            }}
+                        >
+                            Create Account
+                        </button>
+                    </div>
+                )}
 
-                {/* Form */}
-                <form onSubmit={async (e) => {
-                    e.preventDefault();
-                    setBusy(true);
-                    await onSubmit({ name, email, password });
-                    setBusy(false);
-                }} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {/* Error Banner */}
+                {error && (
+                    <div style={{
+                        padding: '8px 10px',
+                        backgroundColor: '#fef2f2',
+                        border: '1px solid #fecaca',
+                        borderRadius: '8px',
+                        color: '#dc2626',
+                        fontSize: '11px',
+                        textAlign: 'center',
+                        fontWeight: '500',
+                        marginBottom: '12px'
+                    }}>
+                        {error}
+                    </div>
+                )}
 
-                    {mode === 'register' && (
+                {/* Success Banner */}
+                {localMsg && !error && (
+                    <div style={{
+                        padding: '8px 10px',
+                        backgroundColor: '#f0fdf4',
+                        border: '1px solid #bbf7d0',
+                        borderRadius: '8px',
+                        color: '#16a34a',
+                        fontSize: '11px',
+                        textAlign: 'center',
+                        fontWeight: '500',
+                        marginBottom: '12px'
+                    }}>
+                        {localMsg}
+                    </div>
+                )}
+
+                {/* ==================== 1. SIGN IN FORM ==================== */}
+                {mode === 'login' && (
+                    <form onSubmit={handleLoginSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '11px' }}>
                         <div>
-                            <label style={{ display: 'block', fontSize: '11px', fontWeight: '600', color: '#475569', marginBottom: '5px' }}>Full Name</label>
+                            <label style={{ display: 'block', fontSize: '11px', fontWeight: '600', color: '#475569', marginBottom: '4px' }}>Email Address</label>
                             <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                                <UserIcon size={16} style={{ position: 'absolute', left: '11px', color: '#94a3b8' }} />
+                                <Mail size={15} style={{ position: 'absolute', left: '11px', color: '#94a3b8' }} />
+                                <input
+                                    type="email"
+                                    value={email}
+                                    onChange={e => setEmail(e.target.value)}
+                                    required
+                                    placeholder="you@domain.com"
+                                    style={{
+                                        width: '100%',
+                                        padding: '8px 12px 8px 34px',
+                                        fontSize: '12px',
+                                        backgroundColor: '#f8fafc',
+                                        border: '1px solid #cbd5e1',
+                                        borderRadius: '8px',
+                                        color: '#1e293b',
+                                        outline: 'none'
+                                    }}
+                                />
+                            </div>
+                        </div>
+
+                        <div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                <label style={{ fontSize: '11px', fontWeight: '600', color: '#475569', margin: 0 }}>Password</label>
+                                <button
+                                    type="button"
+                                    onClick={() => switchMode('forgot')}
+                                    style={{ background: 'none', border: 'none', padding: 0, fontSize: '11px', color: '#6c63ff', cursor: 'pointer', fontWeight: '500' }}
+                                >
+                                    Forgot?
+                                </button>
+                            </div>
+                            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                <Lock size={15} style={{ position: 'absolute', left: '11px', color: '#94a3b8' }} />
+                                <input
+                                    type={showPassword ? 'text' : 'password'}
+                                    value={password}
+                                    onChange={e => setPassword(e.target.value)}
+                                    required
+                                    minLength={8}
+                                    placeholder="At least 8 characters"
+                                    style={{
+                                        width: '100%',
+                                        padding: '8px 34px 8px 34px',
+                                        fontSize: '12px',
+                                        backgroundColor: '#f8fafc',
+                                        border: '1px solid #cbd5e1',
+                                        borderRadius: '8px',
+                                        color: '#1e293b',
+                                        outline: 'none'
+                                    }}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    style={{ position: 'absolute', right: '9px', background: 'none', border: 'none', padding: 0, color: '#94a3b8', cursor: 'pointer', display: 'flex' }}
+                                >
+                                    {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                                </button>
+                            </div>
+                        </div>
+
+                        <button
+                            type="submit"
+                            disabled={busy}
+                            style={{
+                                marginTop: '4px',
+                                padding: '9px 16px',
+                                backgroundColor: '#6c63ff',
+                                color: '#ffffff',
+                                border: 'none',
+                                borderRadius: '8px',
+                                fontSize: '12px',
+                                fontWeight: '600',
+                                cursor: busy ? 'not-allowed' : 'pointer',
+                                opacity: busy ? 0.7 : 1,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '6px',
+                                boxShadow: '0 2px 6px rgba(108, 99, 255, 0.25)'
+                            }}
+                        >
+                            <span>{busy ? 'Signing in…' : 'Sign in to Finora'}</span>
+                            {!busy && <ArrowRight size={14} />}
+                        </button>
+
+                        <div style={{
+                            marginTop: '8px',
+                            paddingTop: '10px',
+                            borderTop: '1px solid #f1f5f9',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between'
+                        }}>
+                            <span style={{ fontSize: '11px', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <Sparkles size={13} style={{ color: '#f59e0b' }} />
+                                Quick test?
+                            </span>
+                            <button
+                                type="button"
+                                onClick={handleDemoFill}
+                                style={{ background: 'none', border: 'none', padding: 0, fontSize: '11px', color: '#6c63ff', fontWeight: '600', cursor: 'pointer', textDecoration: 'underline' }}
+                            >
+                                Fill Demo Login
+                            </button>
+                        </div>
+                    </form>
+                )}
+
+                {/* ==================== 2. CREATE ACCOUNT (OTP FLOW) ==================== */}
+                {mode === 'register' && regStep === 'input' && (
+                    <form onSubmit={handleSendRegisterOtp} style={{ display: 'flex', flexDirection: 'column', gap: '11px' }}>
+                        <div>
+                            <label style={{ display: 'block', fontSize: '11px', fontWeight: '600', color: '#475569', marginBottom: '4px' }}>Full Name</label>
+                            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                <UserIcon size={15} style={{ position: 'absolute', left: '11px', color: '#94a3b8' }} />
                                 <input
                                     type="text"
                                     value={name}
@@ -249,151 +509,316 @@ function AuthScreen({ mode, setMode, onSubmit, error }) {
                                 />
                             </div>
                         </div>
-                    )}
 
-                    <div>
-                        <label style={{ display: 'block', fontSize: '11px', fontWeight: '600', color: '#475569', marginBottom: '5px' }}>Email Address</label>
-                        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                            <Mail size={16} style={{ position: 'absolute', left: '11px', color: '#94a3b8' }} />
-                            <input
-                                type="email"
-                                value={email}
-                                onChange={e => setEmail(e.target.value)}
-                                required
-                                placeholder="you@domain.com"
-                                style={{
-                                    width: '100%',
-                                    padding: '8px 12px 8px 34px',
-                                    fontSize: '12px',
-                                    backgroundColor: '#f8fafc',
-                                    border: '1px solid #cbd5e1',
-                                    borderRadius: '8px',
-                                    color: '#1e293b',
-                                    outline: 'none'
-                                }}
-                            />
+                        <div>
+                            <label style={{ display: 'block', fontSize: '11px', fontWeight: '600', color: '#475569', marginBottom: '4px' }}>Email Address</label>
+                            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                <Mail size={15} style={{ position: 'absolute', left: '11px', color: '#94a3b8' }} />
+                                <input
+                                    type="email"
+                                    value={email}
+                                    onChange={e => setEmail(e.target.value)}
+                                    required
+                                    placeholder="you@domain.com"
+                                    style={{
+                                        width: '100%',
+                                        padding: '8px 12px 8px 34px',
+                                        fontSize: '12px',
+                                        backgroundColor: '#f8fafc',
+                                        border: '1px solid #cbd5e1',
+                                        borderRadius: '8px',
+                                        color: '#1e293b',
+                                        outline: 'none'
+                                    }}
+                                />
+                            </div>
                         </div>
-                    </div>
 
-                    <div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
-                            <label style={{ fontSize: '11px', fontWeight: '600', color: '#475569', margin: 0 }}>Password</label>
-                            {mode === 'login' && (
-                                <span style={{ fontSize: '10px', color: '#64748b', cursor: 'default' }} title="Contact admin if forgotten">Forgot?</span>
-                            )}
+                        <div>
+                            <label style={{ display: 'block', fontSize: '11px', fontWeight: '600', color: '#475569', marginBottom: '4px' }}>Password</label>
+                            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                <Lock size={15} style={{ position: 'absolute', left: '11px', color: '#94a3b8' }} />
+                                <input
+                                    type={showPassword ? 'text' : 'password'}
+                                    value={password}
+                                    onChange={e => setPassword(e.target.value)}
+                                    required
+                                    minLength={8}
+                                    placeholder="At least 8 characters"
+                                    style={{
+                                        width: '100%',
+                                        padding: '8px 34px 8px 34px',
+                                        fontSize: '12px',
+                                        backgroundColor: '#f8fafc',
+                                        border: '1px solid #cbd5e1',
+                                        borderRadius: '8px',
+                                        color: '#1e293b',
+                                        outline: 'none'
+                                    }}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    style={{ position: 'absolute', right: '9px', background: 'none', border: 'none', padding: 0, color: '#94a3b8', cursor: 'pointer', display: 'flex' }}
+                                >
+                                    {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                                </button>
+                            </div>
                         </div>
-                        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                            <Lock size={16} style={{ position: 'absolute', left: '11px', color: '#94a3b8' }} />
-                            <input
-                                type={showPassword ? 'text' : 'password'}
-                                value={password}
-                                onChange={e => setPassword(e.target.value)}
-                                required
-                                minLength={8}
-                                placeholder="At least 8 characters"
-                                style={{
-                                    width: '100%',
-                                    padding: '8px 34px 8px 34px',
-                                    fontSize: '12px',
-                                    backgroundColor: '#f8fafc',
-                                    border: '1px solid #cbd5e1',
-                                    borderRadius: '8px',
-                                    color: '#1e293b',
-                                    outline: 'none'
-                                }}
-                            />
-                            <button
-                                type="button"
-                                onClick={() => setShowPassword(!showPassword)}
-                                style={{
-                                    position: 'absolute',
-                                    right: '9px',
-                                    background: 'none',
-                                    border: 'none',
-                                    padding: 0,
-                                    color: '#94a3b8',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center'
-                                }}
-                            >
-                                {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
-                            </button>
-                        </div>
-                    </div>
 
-                    {error && (
-                        <div style={{
-                            padding: '8px 10px',
-                            backgroundColor: '#fef2f2',
-                            border: '1px solid #fecaca',
-                            borderRadius: '8px',
-                            color: '#dc2626',
-                            fontSize: '11px',
-                            textAlign: 'center',
-                            fontWeight: '500'
-                        }}>
-                            {error}
-                        </div>
-                    )}
-
-                    <button
-                        type="submit"
-                        disabled={busy}
-                        style={{
-                            marginTop: '4px',
-                            padding: '9px 16px',
-                            backgroundColor: '#6c63ff',
-                            color: '#ffffff',
-                            border: 'none',
-                            borderRadius: '8px',
-                            fontSize: '12px',
-                            fontWeight: '600',
-                            cursor: busy ? 'not-allowed' : 'pointer',
-                            opacity: busy ? 0.7 : 1,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '6px',
-                            boxShadow: '0 2px 6px rgba(108, 99, 255, 0.25)',
-                            transition: 'background-color 0.15s ease'
-                        }}
-                    >
-                        <span>{busy ? 'Please wait…' : mode === 'login' ? 'Sign in to Finora' : 'Create Account'}</span>
-                        {!busy && <ArrowRight size={14} />}
-                    </button>
-                </form>
-
-                {/* Demo Credentials Quick Button */}
-                {mode === 'login' && (
-                    <div style={{
-                        marginTop: '16px',
-                        paddingTop: '12px',
-                        borderTop: '1px solid #f1f5f9',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between'
-                    }}>
-                        <span style={{ fontSize: '11px', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <Sparkles size={13} style={{ color: '#f59e0b' }} />
-                            Want to test quickly?
-                        </span>
                         <button
-                            type="button"
-                            onClick={handleDemoFill}
+                            type="submit"
+                            disabled={busy}
                             style={{
-                                background: 'none',
+                                marginTop: '4px',
+                                padding: '9px 16px',
+                                backgroundColor: '#6c63ff',
+                                color: '#ffffff',
                                 border: 'none',
-                                padding: 0,
-                                fontSize: '11px',
-                                color: '#6c63ff',
+                                borderRadius: '8px',
+                                fontSize: '12px',
                                 fontWeight: '600',
-                                cursor: 'pointer',
-                                textDecoration: 'underline'
+                                cursor: busy ? 'not-allowed' : 'pointer',
+                                opacity: busy ? 0.7 : 1,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '6px',
+                                boxShadow: '0 2px 6px rgba(108, 99, 255, 0.25)'
                             }}
                         >
-                            Fill Demo Login
+                            <span>{busy ? 'Sending OTP…' : 'Send Verification Code'}</span>
+                            {!busy && <ArrowRight size={14} />}
                         </button>
+                    </form>
+                )}
+
+                {/* ==================== 2B. REGISTER OTP VERIFICATION ==================== */}
+                {mode === 'register' && regStep === 'otp' && (
+                    <form onSubmit={handleVerifyRegisterOtp} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                        <div style={{ textAlign: 'center', padding: '6px 0' }}>
+                            <p style={{ fontSize: '12px', color: '#475569', margin: '0 0 10px' }}>
+                                Enter the 6-digit verification code sent to: <br /><strong style={{ color: '#1e293b' }}>{email}</strong>
+                            </p>
+                            <input
+                                type="text"
+                                maxLength={6}
+                                value={otp}
+                                onChange={e => setOtp(e.target.value.replace(/\D/g, ''))}
+                                required
+                                placeholder="123456"
+                                autoFocus
+                                style={{
+                                    width: '180px',
+                                    margin: '0 auto',
+                                    padding: '10px',
+                                    fontSize: '22px',
+                                    fontWeight: '800',
+                                    textAlign: 'center',
+                                    letterSpacing: '6px',
+                                    backgroundColor: '#f8fafc',
+                                    border: '2px solid #6c63ff',
+                                    borderRadius: '10px',
+                                    color: '#1e293b',
+                                    outline: 'none',
+                                    display: 'block',
+                                    fontFamily: 'monospace'
+                                }}
+                            />
+                        </div>
+
+                        <button
+                            type="submit"
+                            disabled={busy || otp.length < 6}
+                            style={{
+                                padding: '9px 16px',
+                                backgroundColor: '#10b981',
+                                color: '#ffffff',
+                                border: 'none',
+                                borderRadius: '8px',
+                                fontSize: '12px',
+                                fontWeight: '600',
+                                cursor: (busy || otp.length < 6) ? 'not-allowed' : 'pointer',
+                                opacity: (busy || otp.length < 6) ? 0.7 : 1,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '6px',
+                                boxShadow: '0 2px 6px rgba(16, 185, 129, 0.25)'
+                            }}
+                        >
+                            <span>{busy ? 'Verifying…' : 'Verify & Create Account'}</span>
+                            <Check size={14} />
+                        </button>
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px', marginTop: '2px' }}>
+                            <button
+                                type="button"
+                                onClick={handleSendRegisterOtp}
+                                disabled={busy}
+                                style={{ background: 'none', border: 'none', padding: 0, color: '#6c63ff', cursor: 'pointer', fontWeight: '500', textDecoration: 'underline' }}
+                            >
+                                Resend code
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => { setRegStep('input'); clearStatus(); }}
+                                style={{ background: 'none', border: 'none', padding: 0, color: '#64748b', cursor: 'pointer' }}
+                            >
+                                Edit email / details
+                            </button>
+                        </div>
+                    </form>
+                )}
+
+                {/* ==================== 3. FORGOT PASSWORD ==================== */}
+                {mode === 'forgot' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        {forgotStep === 'email' ? (
+                            <form onSubmit={handleSendForgotOtp} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '11px', fontWeight: '600', color: '#475569', marginBottom: '4px' }}>Registered Email</label>
+                                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                        <Mail size={15} style={{ position: 'absolute', left: '11px', color: '#94a3b8' }} />
+                                        <input
+                                            type="email"
+                                            value={email}
+                                            onChange={e => setEmail(e.target.value)}
+                                            required
+                                            placeholder="you@domain.com"
+                                            style={{
+                                                width: '100%',
+                                                padding: '8px 12px 8px 34px',
+                                                fontSize: '12px',
+                                                backgroundColor: '#f8fafc',
+                                                border: '1px solid #cbd5e1',
+                                                borderRadius: '8px',
+                                                color: '#1e293b',
+                                                outline: 'none'
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+
+                                <button
+                                    type="submit"
+                                    disabled={busy}
+                                    style={{
+                                        marginTop: '4px',
+                                        padding: '9px 16px',
+                                        backgroundColor: '#6c63ff',
+                                        color: '#ffffff',
+                                        border: 'none',
+                                        borderRadius: '8px',
+                                        fontSize: '12px',
+                                        fontWeight: '600',
+                                        cursor: busy ? 'not-allowed' : 'pointer',
+                                        opacity: busy ? 0.7 : 1,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '6px',
+                                        boxShadow: '0 2px 6px rgba(108, 99, 255, 0.25)'
+                                    }}
+                                >
+                                    <span>{busy ? 'Sending Reset Code…' : 'Send Reset Code'}</span>
+                                    {!busy && <ArrowRight size={14} />}
+                                </button>
+                            </form>
+                        ) : (
+                            <form onSubmit={handleResetPassword} style={{ display: 'flex', flexDirection: 'column', gap: '11px' }}>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '11px', fontWeight: '600', color: '#475569', marginBottom: '4px' }}>Reset Code (OTP)</label>
+                                    <input
+                                        type="text"
+                                        maxLength={6}
+                                        value={otp}
+                                        onChange={e => setOtp(e.target.value.replace(/\D/g, ''))}
+                                        required
+                                        placeholder="6-digit OTP"
+                                        style={{
+                                            width: '100%',
+                                            padding: '8px 12px',
+                                            fontSize: '14px',
+                                            fontWeight: '700',
+                                            letterSpacing: '3px',
+                                            backgroundColor: '#f8fafc',
+                                            border: '1px solid #cbd5e1',
+                                            borderRadius: '8px',
+                                            color: '#1e293b',
+                                            outline: 'none'
+                                        }}
+                                    />
+                                </div>
+
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '11px', fontWeight: '600', color: '#475569', marginBottom: '4px' }}>New Password</label>
+                                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                        <Lock size={15} style={{ position: 'absolute', left: '11px', color: '#94a3b8' }} />
+                                        <input
+                                            type={showPassword ? 'text' : 'password'}
+                                            value={newPassword}
+                                            onChange={e => setNewPassword(e.target.value)}
+                                            required
+                                            minLength={8}
+                                            placeholder="At least 8 characters"
+                                            style={{
+                                                width: '100%',
+                                                padding: '8px 34px 8px 34px',
+                                                fontSize: '12px',
+                                                backgroundColor: '#f8fafc',
+                                                border: '1px solid #cbd5e1',
+                                                borderRadius: '8px',
+                                                color: '#1e293b',
+                                                outline: 'none'
+                                            }}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowPassword(!showPassword)}
+                                            style={{ position: 'absolute', right: '9px', background: 'none', border: 'none', padding: 0, color: '#94a3b8', cursor: 'pointer', display: 'flex' }}
+                                        >
+                                            {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <button
+                                    type="submit"
+                                    disabled={busy}
+                                    style={{
+                                        marginTop: '4px',
+                                        padding: '9px 16px',
+                                        backgroundColor: '#6c63ff',
+                                        color: '#ffffff',
+                                        border: 'none',
+                                        borderRadius: '8px',
+                                        fontSize: '12px',
+                                        fontWeight: '600',
+                                        cursor: busy ? 'not-allowed' : 'pointer',
+                                        opacity: busy ? 0.7 : 1,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '6px',
+                                        boxShadow: '0 2px 6px rgba(108, 99, 255, 0.25)'
+                                    }}
+                                >
+                                    <span>{busy ? 'Updating…' : 'Set New Password'}</span>
+                                    <Check size={14} />
+                                </button>
+                            </form>
+                        )}
+
+                        <div style={{ textAlign: 'center', marginTop: '6px' }}>
+                            <button
+                                type="button"
+                                onClick={() => switchMode('login')}
+                                style={{ background: 'none', border: 'none', padding: 0, fontSize: '11px', color: '#64748b', cursor: 'pointer', textDecoration: 'underline' }}
+                            >
+                                ← Back to Sign In
+                            </button>
+                        </div>
                     </div>
                 )}
 
